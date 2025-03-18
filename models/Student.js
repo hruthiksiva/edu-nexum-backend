@@ -1,67 +1,26 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
-const studentSchema = new mongoose.Schema({
-  googleId: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true,
-  },
-  ratings: [
-    {
-      teacherId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Teacher",
-        required: true,
-      },
-      rating: {
-        type: Number,
-        min: 1,
-        max: 5,
-        required: true,
-      },
-      comment: {
-        type: String,
-      },
-      date: {
-        type: Date,
-        default: Date.now,
-      },
-    },
-  ],
-  averageRating: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 5,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
+const StudentSchema = new mongoose.Schema({
+  googleId: { type: String, unique: true, sparse: true }, // Sparse for optional Google auth
+  username: { type: String, unique: true, sparse: true }, // Sparse for optional manual auth
+  password: { type: String }, // Hashed password for manual auth
+  name: { type: String },
+  email: { type: String, unique: true, sparse: true },
+  contactNumber: { type: String },
+  ratings: [{ teacherId: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" }, rating: Number, comment: String }],
+  createdAt: { type: Date, default: Date.now },
 });
 
-// Indexes for faster queries
-studentSchema.index({ email: 1 });
-
-// Pre-save hook to update `updatedAt` and calculate average rating
-studentSchema.pre("save", function (next) {
-  this.updatedAt = Date.now();
-  if (this.ratings.length > 0) {
-    const totalRating = this.ratings.reduce((sum, rating) => sum + rating.rating, 0);
-    this.averageRating = totalRating / this.ratings.length;
+StudentSchema.pre("save", async function (next) {
+  if (this.isModified("password") && this.password) {
+    this.password = await bcrypt.hash(this.password, 10);
   }
   next();
 });
 
-module.exports = mongoose.model("Student", studentSchema);
+StudentSchema.methods.comparePassword = async function (password) {
+  return bcrypt.compare(password, this.password);
+};
+
+module.exports = mongoose.model("Student", StudentSchema);

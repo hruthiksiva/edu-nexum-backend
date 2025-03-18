@@ -1,47 +1,46 @@
 const Webinar = require("../models/Webinar");
-const Teacher = require("../models/Teacher");
 
-exports.createWebinar = async (req, res) => {
+const createWebinar = async (req, res) => {
+  console.log("Request body:", req.body);
+  console.log("User from auth:", req.user);
   const { title, description, date, isPaid, price, registrationLink } = req.body;
   try {
-    const teacher = await Teacher.findOne({ email: req.user.email });
-    if (!teacher) return res.status(403).json({ message: "Only teachers can create webinars" });
-
+    if (!req.user || (!req.user.sub && !req.user.id)) {
+      console.log("No authenticated user or ID found");
+      throw new Error("No authenticated user or ID found");
+    }
+    const teacherId = req.user.sub || req.user.id; // Support Google sub or admin id
     const webinar = new Webinar({
-      teacherId: teacher._id,
+      teacherId,
       title,
       description,
       date,
       isPaid,
-      price: isPaid ? price : 0,
+      price: isPaid ? price : undefined,
       registrationLink,
     });
-    await webinar.save();
-    res.status(201).json(webinar);
+    console.log("Webinar to save:", webinar);
+    const savedWebinar = await webinar.save();
+    console.log("Webinar saved successfully:", savedWebinar);
+    res.status(201).json(savedWebinar);
   } catch (error) {
+    console.error("Create webinar error:", error.stack);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
-exports.getAllWebinars = async (req, res) => {
+const getWebinars = async (req, res) => {
   try {
-    const webinars = await Webinar.find({ status: "upcoming" })
-      .populate("teacherId", "name email")
-      .sort({ date: 1 });
+    const webinars = await Webinar.find();
+    console.log("Fetched webinars:", webinars);
     res.json(webinars);
   } catch (error) {
+    console.error("Get webinars error:", error.stack);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
-exports.getTeacherWebinars = async (req, res) => {
-  try {
-    const teacher = await Teacher.findOne({ email: req.user.email });
-    if (!teacher) return res.status(403).json({ message: "Teacher not found" });
-
-    const webinars = await Webinar.find({ teacherId: teacher._id }).sort({ date: -1 });
-    res.json(webinars);
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
+module.exports = {
+  createWebinar,
+  getWebinars,
 };
